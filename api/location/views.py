@@ -11,6 +11,7 @@ from main.lib.climate_data_functions import get_all_location_coordinates, proces
 
 class LocationView(APIView):
     def get(self, request):
+        """GET request used for fetching location data."""
         name = request.query_params.get('name')
 
         if not name:
@@ -21,9 +22,11 @@ class LocationView(APIView):
 
         return Response(data=_serializer.data, status=200)
     
-    # POST request used for creating new location entry.
-    # This also fetches and processes climate data for the location.
     def post(self, request):
+        """
+        POST request used for creating new location entry.
+        This also fetches and processes climate data for the location.
+        """
         data = request.data.copy()
 
         name = data.get("name")
@@ -56,9 +59,9 @@ class LocationView(APIView):
             return Response({"message": "Location with this name or exact latitude and longitude already exists."}, status=400)
 
         return Response(status=200)
-    
-    # DELETE request used for deleting existing location entry.
+
     def delete(self, request):
+        """DELETE request used for deleting location entry."""
         name = request.query_params.get('name')
         
         if not name:
