@@ -15,3 +15,6 @@ celerybeat.pid
 env/
 venv/
 ENV/
+
+# sqlite cache
+.cache.sqlite

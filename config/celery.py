@@ -3,6 +3,8 @@ from __future__ import absolute_import, unicode_literals
 
 import os
 from celery import Celery
+from celery.signals import worker_ready
+from celery.schedules import crontab
 
 # Set the default Django settings module 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
@@ -18,8 +20,14 @@ app.autodiscover_tasks()
 
 # Define periodic tasks
 app.conf.beat_schedule = {
-    'example-task': {
+    'fetch_data_task': {
         'task': 'config.tasks.fetch_data',  # Adjust to your actual app and task
-        'schedule': 10.0,  # Run every 60 seconds
+        'schedule': crontab(minute=1, hour=0), # Fetch new data just after midnight to get full data for previous day
     },
 }
+
+# Execute task on worker startup
+@worker_ready.connect
+def at_start(sender, **k):
+    from config.tasks import fetch_data
+    fetch_data.delay()
