@@ -121,3 +121,103 @@ class ClimateReadingTestCases(TestCase):
         self.region.delete()
         self.assertEqual(Region.objects.filter(name=self.test_name).count(), 0)
         self.assertEqual(ClimateReading.objects.filter(region_id=region_id).count(), 0)
+
+    def test_evaluate_optimal_conditions(self):
+        """Test evaluation with optimal growing conditions"""
+        optimal_reading = ClimateReading.objects.create(
+            region=self.region,
+            date="2020-02-01",
+            mean_temperature=28.0,
+            max_temperature=30.0,  # Optimal: 25-32°C
+            min_temperature=24.0,
+            mean_humidity=50.0,    # Optimal: 40-60%
+            max_humidity=60.0,
+            min_humidity=40.0,
+            rain=3.0,              # Optimal: 0-5mm
+            cloud_cover=15.0,      # Lower is better
+            soil_moisture=0.3
+        )
+        
+        score = optimal_reading.evaluate()
+        # Should be close to 100 - 25% temp(100) + 25% humidity(100) + 25% rain(100) + 25% cloud(85)
+        self.assertGreaterEqual(score, 95)
+    
+    def test_evaluate_poor_conditions(self):
+        """Test evaluation with poor growing conditions"""
+        poor_reading = ClimateReading.objects.create(
+            region=self.region,
+            date="2020-02-02",
+            mean_temperature=10.0,
+            max_temperature=15.0,  # Poor: < 20°C
+            min_temperature=5.0,
+            mean_humidity=85.0,    # Poor: > 80%
+            max_humidity=90.0,
+            min_humidity=80.0,
+            rain=25.0,             # Poor: > 15mm
+            cloud_cover=90.0,      # High cloud cover
+            soil_moisture=0.5
+        )
+        
+        score = poor_reading.evaluate()
+        # Expected: 25% temp(40) + 25% humidity(50) + 25% rain(40) + 25% cloud(10) = 35
+        self.assertLessEqual(score, 40)
+    
+    def test_evaluate_mixed_conditions(self):
+        """Test evaluation with mixed growing conditions"""
+        mixed_reading = ClimateReading.objects.create(
+            region=self.region,
+            date="2020-02-03",
+            mean_temperature=23.0,
+            max_temperature=24.0,  # Good but not optimal: 80 points
+            min_temperature=18.0,
+            mean_humidity=65.0,    # Good but not optimal: 80 points
+            max_humidity=70.0,
+            min_humidity=60.0,
+            rain=2.0,              # Optimal: 100 points
+            cloud_cover=40.0,      # Moderate: 60 points
+            soil_moisture=0.3
+        )
+        
+        score = mixed_reading.evaluate()
+        # Expected: 25% temp(80) + 25% humidity(80) + 25% rain(100) + 25% cloud(60) = 80
+        self.assertTrue(75 <= score <= 85)
+    
+    def test_evaluate_boundary_conditions(self):
+        """Test evaluation with boundary conditions"""
+        boundary_reading = ClimateReading.objects.create(
+            region=self.region,
+            date="2020-02-04",
+            mean_temperature=25.0,
+            max_temperature=25.0,  # Lower boundary of optimal: 100 points
+            min_temperature=20.0,
+            mean_humidity=40.0,    # Lower boundary of optimal: 100 points
+            max_humidity=50.0,
+            min_humidity=30.0,
+            rain=5.0,              # Upper boundary of optimal: 100 points
+            cloud_cover=0.0,       # Best possible: 100 points
+            soil_moisture=0.3
+        )
+        
+        score = boundary_reading.evaluate()
+        # Expected: 25% temp(100) + 25% humidity(100) + 25% rain(100) + 25% cloud(100) = 100
+        self.assertEqual(score, 100)
+    
+    def test_evaluate_zero_rainfall(self):
+        """Test evaluation with zero rainfall"""
+        zero_rain_reading = ClimateReading.objects.create(
+            region=self.region,
+            date="2020-02-05",
+            mean_temperature=28.0,
+            max_temperature=30.0,  # Optimal: 100 points
+            min_temperature=25.0,
+            mean_humidity=50.0,    # Optimal: 100 points
+            max_humidity=60.0,
+            min_humidity=40.0,
+            rain=0.0,              # Zero rain: 60 points
+            cloud_cover=30.0,      # 70 points
+            soil_moisture=0.3
+        )
+        
+        score = zero_rain_reading.evaluate()
+        # Expected: 25% temp(100) + 25% humidity(100) + 25% rain(60) + 25% cloud(70) = 82.5
+        self.assertAlmostEqual(score, 82.5, delta=0.5)

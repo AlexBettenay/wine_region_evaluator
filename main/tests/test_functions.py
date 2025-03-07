@@ -1,6 +1,6 @@
 from django.test import TestCase
 import pandas as pd
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 from datetime import date
 from main.lib.open_meteo import ClimateDataProvider
 from main.lib.climate_data_functions import (
@@ -13,7 +13,7 @@ from main.models import Region, ClimateReading
 from django.db.models import Max
 import numpy as np
 
-class ClimateDataProviderTestCase(TestCase):
+class ClimateDataProviderTestCases(TestCase):
     """Test cases for the ClimateDataProvider class"""
     
     @patch('main.lib.open_meteo.openmeteo_requests.Client')
@@ -112,7 +112,7 @@ class ClimateDataProviderTestCase(TestCase):
             self.assertEqual(result["precipitation_sum"].tolist(), [20.0, 20.5, 21.0, 21.5, 22.0])
 
 
-class ClimateDataFunctionsTestCase(TestCase):
+class ClimateDataFunctionsTestCases(TestCase):
     """Test cases for climate data processing functions"""
     
     def setUp(self):

@@ -1,6 +1,5 @@
 from celery import shared_task
 from main.lib.open_meteo import ClimateDataProvider
-from main.models import ClimateReading
 from datetime import date, timedelta
 
 from main.lib.climate_data_functions import get_all_region_coordinates, process_climate_data, determine_start_date, create_climate_readings

@@ -2,7 +2,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from main.lib.climate_analyzation import analyze_seasonal_suitability, analyze_longterm_viability, analyze_historical_performance
-from main.models import ClimateReading, Region
+from main.models import Region
 
 class WineRegionSeasonAnalysisView(APIView):
     def get(self, request):
@@ -83,7 +83,21 @@ class WineRegionPerformanceComparisonView(APIView):
 
         if len(regions) == 0:
             return Response({"message": "No regions found."}, status=404)
-
-        results = analyze_historical_performance(regions, only)
+        
+        results = []
+        for region in regions:
+            results.append({
+                "name": region.name,
+                "avg_historical_performance": analyze_historical_performance(region)
+                })
+            
+        results = sorted(results, key=lambda x: x['avg_historical_performance'], reverse=True)
+        
+        if only and only.lower() == 'best':
+            results = results[0]
+            return Response(data=results[0])
+        
+        if only and only.lower() == 'worst':
+            results = results[-1]
         
         return Response(data=results, status=200)
