@@ -1,31 +1,35 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from main.models import Location
+from main.models import Region
 from django.db import IntegrityError
-from .serializers import LocationSerializer
+from .serializers import RegionSerializer
 from main.lib.open_meteo import ClimateDataProvider
 from datetime import date, timedelta
-from main.lib.climate_data_functions import get_all_location_coordinates, process_climate_data, determine_start_date, create_climate_readings
+from main.lib.climate_data_functions import process_climate_data, create_climate_readings
 
 # None of these API endpoints are entirely required but I have added them for the sake of completeness.
 
-class LocationView(APIView):
+class RegionView(APIView):
     def get(self, request):
-        """GET request used for fetching location data."""
+        """
+        GET request used for fetching Region data.
+
+        Accepts query parameter 'name' to identify the Region to fetch.
+        """
         name = request.query_params.get('name')
 
         if not name:
-            return Response({"message": "Name is required to identify the location."}, status=400)
+            return Response({"message": "Name is required to identify the Region."}, status=400)
         
-        location = Location.objects.get(name=name)
-        _serializer = LocationSerializer(location)
+        region = Region.objects.get(name=name)
+        _serializer = RegionSerializer(region)
 
         return Response(data=_serializer.data, status=200)
     
     def post(self, request):
         """
-        POST request used for creating new location entry.
-        This also fetches and processes climate data for the location.
+        POST request used for creating new Region entry.
+        This also fetches and processes climate data for the Region.
         """
         data = request.data.copy()
 
@@ -38,8 +42,8 @@ class LocationView(APIView):
             return Response({"message": "Missing required fields."}, status=400)
 
         try:
-            # Create new location entry.
-            location = Location.objects.create(
+            # Create new Region entry.
+            region = Region.objects.create(
                 name=name,
                 latitude=latitude,
                 longitude=longitude,
@@ -52,25 +56,29 @@ class LocationView(APIView):
             end_date = date.today() - timedelta(days=1)
             climate_data = provider.get_climate_data(latitude, longitude, start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
 
-            reading_objects =  process_climate_data(location, climate_data[f"{latitude},{longitude}"])
+            reading_objects =  process_climate_data(region, climate_data[f"{latitude},{longitude}"])
             create_climate_readings(reading_objects)
 
         except IntegrityError:
-            return Response({"message": "Location with this name or exact latitude and longitude already exists."}, status=400)
+            return Response({"message": "Region with this name or exact latitude and longitude already exists."}, status=400)
 
         return Response(status=200)
 
     def delete(self, request):
-        """DELETE request used for deleting location entry."""
+        """
+        DELETE request used for deleting Region entry.
+
+        Accepts query parameter 'name' to identify the Region to delete
+        """
         name = request.query_params.get('name')
         
         if not name:
-            return Response({"message": "Name is required to identify the location to delete."}, status=400)
+            return Response({"message": "Name is required to identify the Region to delete."}, status=400)
         
         try:
-            # Find and delete the location entry
-            location = Location.objects.get(name=name)
-            location.delete()
+            # Find and delete the Region entry
+            region = Region.objects.get(name=name)
+            region.delete()
             return Response(status=200)
-        except Location.DoesNotExist:
-            return Response({"message": "Location with this name does not exist."}, status=404)
+        except Region.DoesNotExist:
+            return Response({"message": "Region with this name does not exist."}, status=404)

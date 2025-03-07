@@ -1,6 +1,8 @@
 from django.urls import path, include
-from . import views
 
+# Separated urls for related API endpoints.
+# This is done to keep the code organized and maintainable.
 urlpatterns = [
-    path("location", include("api.location.urls")),
+    path("region/", include("api.region.urls")),
+    path("analysis/", include("api.analysis.urls")),
 ]

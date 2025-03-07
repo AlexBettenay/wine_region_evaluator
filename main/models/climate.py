@@ -1,8 +1,8 @@
 from django.db import models
-from .location import Location
+from .region import Region
 
 class ClimateReading(models.Model):
-    location = models.ForeignKey(Location, on_delete=models.CASCADE)
+    region = models.ForeignKey(Region, on_delete=models.CASCADE, related_name='climate_readings')
     date = models.DateField()
     mean_temperature = models.FloatField()
     max_temperature = models.FloatField()
@@ -15,7 +15,7 @@ class ClimateReading(models.Model):
     soil_moisture = models.FloatField()
 
     class Meta:
-        unique_together = ['location', 'date']
+        unique_together = ['region', 'date']
         indexes = [
-            models.Index(fields=['location', 'date']),
+            models.Index(fields=['region', 'date']),
         ]

@@ -1,15 +1,15 @@
 from django.test import TestCase
 import pandas as pd
 from unittest.mock import patch, MagicMock, call
-from datetime import date, datetime
+from datetime import date
 from main.lib.open_meteo import ClimateDataProvider
 from main.lib.climate_data_functions import (
-    get_all_location_coordinates,
+    get_all_region_coordinates,
     process_climate_data,
     determine_start_date,
     create_climate_readings
 )
-from main.models import Location, ClimateReading
+from main.models import Region, ClimateReading
 from django.db.models import Max
 import numpy as np
 
@@ -27,8 +27,8 @@ class ClimateDataProviderTestCase(TestCase):
         self.assertIsNotNone(self.provider.client)
     
     @patch('main.lib.open_meteo.openmeteo_requests.Client')
-    def test_get_climate_data_single_location(self, mock_client):
-        """Test fetching climate data for single location"""
+    def test_get_climate_data_single_region(self, mock_client):
+        """Test fetching climate data for single region"""
         # Setup mock response
         mock_response = MagicMock()
         self.mock_client.weather_api.return_value = [mock_response]
@@ -45,8 +45,8 @@ class ClimateDataProviderTestCase(TestCase):
         self.assertEqual(result["45.0,45.0"].equals(test_df), True)
     
     @patch('main.lib.open_meteo.openmeteo_requests.Client')
-    def test_get_climate_data_multiple_locations(self, mock_client):
-        """Test fetching climate data for multiple locations"""
+    def test_get_climate_data_multiple_regions(self, mock_client):
+        """Test fetching climate data for multiple regions"""
         # Setup mock response
         self.mock_client.weather_api.return_value = [MagicMock()]
         
@@ -54,7 +54,7 @@ class ClimateDataProviderTestCase(TestCase):
         test_df = pd.DataFrame({'date': pd.date_range('2020-01-01', '2020-01-05')})
         self.provider._process_response = MagicMock(return_value=test_df)
         
-        # Call the method with multiple locations
+        # Call the method with multiple regions
         lats = [45.0, 46.0]
         longs = [45.0, 46.0]
         result = self.provider.get_climate_data(lats, longs, "2020-01-01", "2020-01-05")
@@ -116,24 +116,24 @@ class ClimateDataFunctionsTestCase(TestCase):
     """Test cases for climate data processing functions"""
     
     def setUp(self):
-        """Create test locations and readings"""
-        self.location1 = Location.objects.create(
-            name="Test Location 1",
+        """Create test regions and readings"""
+        self.region1 = Region.objects.create(
+            name="Test Region 1",
             latitude=45.0,
             longitude=45.0,
             description="Test Description 1"
         )
         
-        self.location2 = Location.objects.create(
-            name="Test Location 2",
+        self.region2 = Region.objects.create(
+            name="Test Region 2",
             latitude=46.0,
             longitude=46.0,
             description="Test Description 2"
         )
         
-        # Create a test reading for location1
+        # Create a test reading for region1
         ClimateReading.objects.create(
-            location=self.location1,
+            region=self.region1,
             date="2020-01-01",
             mean_temperature=10.0,
             max_temperature=15.0,
@@ -146,26 +146,26 @@ class ClimateDataFunctionsTestCase(TestCase):
             soil_moisture=0.25
         )
     
-    def test_get_all_location_coordinates(self):
-        """Test fetching coordinates for all locations"""
-        latitudes, longitudes, lookup_dict, locations = get_all_location_coordinates()
+    def test_get_all_region_coordinates(self):
+        """Test fetching coordinates for all regions"""
+        latitudes, longitudes, lookup_dict, regions = get_all_region_coordinates()
         
         # Assertions
         self.assertEqual(len(latitudes), 2)
         self.assertEqual(len(longitudes), 2)
         self.assertEqual(len(lookup_dict), 2)
-        self.assertEqual(len(locations), 2)
+        self.assertEqual(len(regions), 2)
         
         self.assertIn(45.0, latitudes)
         self.assertIn(46.0, latitudes)
         self.assertIn(45.0, longitudes)
         self.assertIn(46.0, longitudes)
         
-        self.assertEqual(lookup_dict["45.0,45.0"], self.location1)
-        self.assertEqual(lookup_dict["46.0,46.0"], self.location2)
+        self.assertEqual(lookup_dict["45.0,45.0"], self.region1)
+        self.assertEqual(lookup_dict["46.0,46.0"], self.region2)
     
     def test_process_climate_data(self):
-        """Test processing climate data for a location"""
+        """Test processing climate data for a region"""
         # Create a test DataFrame simulating climate data
         data = {
             'date': pd.date_range('2020-01-01', '2020-01-03'),
@@ -182,11 +182,11 @@ class ClimateDataFunctionsTestCase(TestCase):
         climate_df = pd.DataFrame(data)
         
         # Process the data
-        readings = process_climate_data(self.location1, climate_df)
+        readings = process_climate_data(self.region1, climate_df)
         
         # Assertions
         self.assertEqual(len(readings), 3)
-        self.assertEqual(readings[0].location, self.location1)
+        self.assertEqual(readings[0].region, self.region1)
         self.assertEqual(readings[0].mean_temperature, 10.0)
         self.assertEqual(readings[1].max_temperature, 16.0)
         self.assertEqual(readings[2].min_humidity, 22.0)
@@ -195,7 +195,7 @@ class ClimateDataFunctionsTestCase(TestCase):
         """Test determining start date with existing readings"""
         # Create another reading with a different date
         ClimateReading.objects.create(
-            location=self.location2,
+            region=self.region2,
             date="2020-02-01",
             mean_temperature=10.0,
             max_temperature=15.0,
@@ -209,7 +209,7 @@ class ClimateDataFunctionsTestCase(TestCase):
         )
         
         # Get the start date
-        start_date = determine_start_date([self.location1, self.location2])
+        start_date = determine_start_date([self.region1, self.region2])
         
         # Should return the earliest of the latest dates (2020-01-01)
         self.assertEqual(start_date.strftime('%Y-%m-%d'), "2020-01-01")
@@ -220,7 +220,7 @@ class ClimateDataFunctionsTestCase(TestCase):
         ClimateReading.objects.all().delete()
         
         # Get the start date
-        start_date = determine_start_date([self.location1, self.location2])
+        start_date = determine_start_date([self.region1, self.region2])
         
         # Should return one year ago
         one_year_ago = date(date.today().year - 1, date.today().month, date.today().day)
@@ -229,10 +229,10 @@ class ClimateDataFunctionsTestCase(TestCase):
     def test_create_climate_readings(self):
         """Test creating climate readings in bulk"""
         # Create test reading objects
-        location = self.location1
+        region = self.region1
         readings = [
             ClimateReading(
-                location=location,
+                region=region,
                 date="2020-03-01",
                 mean_temperature=10.0,
                 max_temperature=15.0,
@@ -245,7 +245,7 @@ class ClimateDataFunctionsTestCase(TestCase):
                 soil_moisture=0.25
             ),
             ClimateReading(
-                location=location,
+                region=region,
                 date="2020-03-02",
                 mean_temperature=11.0,
                 max_temperature=16.0,

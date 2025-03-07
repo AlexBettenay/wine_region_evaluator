@@ -1,2 +1,2 @@
-from .location import *
+from .region import *
 from .climate import *

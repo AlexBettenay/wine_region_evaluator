@@ -1,6 +1,6 @@
 from django.db import models
 
-class Location(models.Model):
+class Region(models.Model):
     name = models.CharField(max_length=255, unique=True)
     latitude = models.FloatField(null=False)
     longitude = models.FloatField(null=False)

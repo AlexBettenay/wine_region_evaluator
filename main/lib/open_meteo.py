@@ -2,6 +2,8 @@ import openmeteo_requests
 import requests_cache
 import pandas as pd
 from retry_requests import retry
+from typing import List, Dict
+from openmeteo_sdk import WeatherApiResponse
 
 class ClimateDataProvider:
     """Class to handle fetching and processing climate data from Open-Meteo API"""
@@ -9,7 +11,7 @@ class ClimateDataProvider:
     def __init__(self, cache_duration=3600):
         """Initialize the climate data provider with cache configuration
         
-        Args:
+        Parameters:
             cache_duration: Cache duration in seconds (default: 1 hour)
         """
         # Setup the API client with cache and retry
@@ -17,18 +19,18 @@ class ClimateDataProvider:
         retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
         self.client = openmeteo_requests.Client(session=retry_session)
         
-    def get_climate_data(self, latitude, longitude, start_date, end_date, variables=None):
-        """Fetch climate data for one or multiple locations
+    def get_climate_data(self, latitude: float, longitude: float, start_date: str, end_date: str, variables: List[str]=None) -> Dict[str, pd.DataFrame]:
+        """Fetch climate data for one or multiple Regions
         
-        Args:
-            latitude: Location latitude or list of latitudes
-            longitude: Location longitude or list of longitudes
+        Parameters:
+            latitude: Region latitude or list of latitudes
+            longitude: Region longitude or list of longitudes
             start_date: Start date in YYYY-MM-DD format
             end_date: End date in YYYY-MM-DD format
             variables: List of weather variables to fetch (optional)
             
         Returns:
-            Dictionary of pandas DataFrames keyed by location coordinates,
+            Dictionary of pandas DataFrames keyed by region coordinates,
         """
         
         if variables is None:
@@ -46,7 +48,7 @@ class ClimateDataProvider:
         
         results = {}
         
-        # Process each location
+        # Process each region
         for lat, lon in zip(lats, lons):
             # Configure API request parameters
             params = {
@@ -63,15 +65,15 @@ class ClimateDataProvider:
             responses = self.client.weather_api(url, params=params)
             
             # Process the response
-            location_key = f"{lat},{lon}"
-            results[location_key] = self._process_response(responses[0], variables)
+            region_key = f"{lat},{lon}"
+            results[region_key] = self._process_response(responses[0], variables)
         
         return results
     
-    def _process_response(self, response, variables):
+    def _process_response(self, response: WeatherApiResponse, variables: List[str]) -> pd.DataFrame:
         """Process API response into a pandas DataFrame
         
-        Args:
+        Parameters:
             response: API response object
             variables: List of requested variables
         Returns:

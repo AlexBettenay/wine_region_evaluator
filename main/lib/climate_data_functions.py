@@ -1,34 +1,45 @@
-from celery import shared_task
-from main.lib.open_meteo import ClimateDataProvider
-from main.models import Location, ClimateReading
-from datetime import date, timedelta
+from main.models import Region, ClimateReading
+from datetime import date
 from django.db.models import Max
+from typing import List
+import pandas as pd
 
-def get_all_location_coordinates():
-    """Get coordinates for all locations and build lookup dictionary"""
-    locations = Location.objects.all()
+def get_all_region_coordinates():
+    """
+    Get coordinates for all Regions and build lookup dictionary
+
+    Returns:
+        Tuple: (latitudes: (List[float]), longitudes: (List[float]), lookup_dict: (Dict[str, Region]), regions: (List[Region])
+    """
+    regions = Region.objects.all()
     latitudes = []
     longitudes = []
     lookup_dict = {}
     
-    for location in locations:
-        latitudes.append(location.latitude)
-        longitudes.append(location.longitude)
-        lookup_dict[f"{location.latitude},{location.longitude}"] = location
+    for region in regions:
+        latitudes.append(region.latitude)
+        longitudes.append(region.longitude)
+        lookup_dict[f"{region.latitude},{region.longitude}"] = region
     
-    return latitudes, longitudes, lookup_dict, locations
+    return latitudes, longitudes, lookup_dict, regions
 
-def process_climate_data(location, climate_data):
-    """Process climate data for a specific location"""
+def process_climate_data(region: Region, climate_data: pd.DataFrame) -> List[ClimateReading]:
+    """
+    Process climate data for a specific region
+
+    Parameters:
+        region (Region): A Region model instance
+        climate_data (DataFrame): A DataFrame containing climate data for the Region
+    """
     # Add your processing logic here
-    print(f"Processing data for {location.name}")
+    print(f"Processing data for {region.name}")
 
     readings = []
     # Iterate through each row (day) in the DataFrame
     for index, row in climate_data.iterrows():
         # Create a new climate reading for each day
         reading = ClimateReading(
-            location=location,
+            region=region,
             date=row['date'],
             mean_temperature=row['temperature_2m_mean'],
             max_temperature=row['temperature_2m_max'],
@@ -43,14 +54,17 @@ def process_climate_data(location, climate_data):
         readings.append(reading)
     return readings
 
-def determine_start_date(locations):
+def determine_start_date(regions: List[Region]) -> date:
     """Determine the start date for fetching climate data
     
-    Gets the latest reading date for each location,
-    then returns the earliest of these dates to ensure all locations get updated.
+    Gets the latest reading date for each region,
+    then returns the earliest of these dates to ensure all regions get updated.
+
+    Parameters:
+        regions (List[Region]): List of Region instances
     """
-    # Get the latest date for each location
-    latest_dates = ClimateReading.objects.filter(location__in=locations).values('location').annotate(
+    # Get the latest date for each Region
+    latest_dates = ClimateReading.objects.filter(region__in=regions).values('region').annotate(
         latest_date=Max('date')
     )
     
@@ -64,8 +78,14 @@ def determine_start_date(locations):
     today = date.today()
     return date(today.year - 1, today.month, today.day)
 
-def create_climate_readings(reading_objects):
-    """Bulk create ClimateReading objects"""
+def create_climate_readings(reading_objects: List[ClimateReading]):
+    """
+    Bulk create ClimateReading objects
+
+    Parameters:
+        reading_objects (List[ClimateReading]): List of ClimateReading objects to create
+    
+    """
     if (len(reading_objects) > 0):
         # Bulk create the ClimateReading objects
         ClimateReading.objects.bulk_create(reading_objects, ignore_conflicts=True)

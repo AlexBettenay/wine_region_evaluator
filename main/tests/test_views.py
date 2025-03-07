@@ -1,125 +1,125 @@
 from django.test import TestCase
-from main.models import Location, ClimateReading
+from main.models import Region, ClimateReading
 from django.db import IntegrityError
-from api.location.views import LocationView
+from api.region.views import RegionView
 from rest_framework.test import APIRequestFactory
 from django.urls import reverse
 from rest_framework import status
 from unittest.mock import patch
 
-class LocationViewsTestCases(TestCase):
+class RegionViewsTestCases(TestCase):
     def setUp(self):
         """Set up test data and API request factory"""
         self.factory = APIRequestFactory()
-        self.view = LocationView.as_view()
+        self.view = RegionView.as_view()
         
-        # Create a test location
-        self.test_location = Location.objects.create(
-            name="Test Location",
+        # Create a test region
+        self.test_region = Region.objects.create(
+            name="Test Region",
             latitude=45.0,
             longitude=45.0,
             description="Test Description"
         )
         
-        # Data for creating a new location
-        self.new_location_data = {
-            "name": "New Test Location",
+        # Data for creating a new region
+        self.new_region_data = {
+            "name": "New Test Region",
             "latitude": 50.0,
             "longitude": 50.0,
             "description": "New Test Description"
         }
     
-    def test_get_location_success(self):
-        """Test successful retrieval of a location"""
-        request = self.factory.get('/api/location/', {'name': self.test_location.name})
+    def test_get_region_success(self):
+        """Test successful retrieval of a region"""
+        request = self.factory.get('/api/region/', {'name': self.test_region.name})
         response = self.view(request)
         
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data['name'], self.test_location.name)
-        self.assertEqual(float(response.data['latitude']), self.test_location.latitude)
-        self.assertEqual(float(response.data['longitude']), self.test_location.longitude)
+        self.assertEqual(response.data['name'], self.test_region.name)
+        self.assertEqual(float(response.data['latitude']), self.test_region.latitude)
+        self.assertEqual(float(response.data['longitude']), self.test_region.longitude)
     
-    def test_get_location_missing_name(self):
+    def test_get_region_missing_name(self):
         """Test error when name parameter is missing"""
-        request = self.factory.get('/api/location/')
+        request = self.factory.get('/api/region/')
         response = self.view(request)
         
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.data['message'], "Name is required to identify the location.")
+        self.assertEqual(response.data['message'], "Name is required to identify the Region.")
     
-    def test_get_location_not_found(self):
-        """Test error when location doesn't exist"""
-        request = self.factory.get('/api/location/', {'name': 'Non-existent Location'})
+    def test_get_region_not_found(self):
+        """Test error when region doesn't exist"""
+        request = self.factory.get('/api/region/', {'name': 'Non-existent Region'})
         
-        with self.assertRaises(Location.DoesNotExist):
+        with self.assertRaises(Region.DoesNotExist):
             self.view(request)
     
-    @patch('api.location.views.ClimateDataProvider')
-    @patch('api.location.views.process_climate_data')
-    @patch('api.location.views.create_climate_readings')
-    def test_post_location_success(self, mock_create_readings, mock_process_data, mock_provider_class):
-        """Test successful creation of a location with mocked climate data processing"""
+    @patch('api.region.views.ClimateDataProvider')
+    @patch('api.region.views.process_climate_data')
+    @patch('api.region.views.create_climate_readings')
+    def test_post_region_success(self, mock_create_readings, mock_process_data, mock_provider_class):
+        """Test successful creation of a region with mocked climate data processing"""
         # Setup mocks
         mock_provider = mock_provider_class.return_value
-        mock_provider.get_climate_data.return_value = {f"{self.new_location_data['latitude']},{self.new_location_data['longitude']}": []}
+        mock_provider.get_climate_data.return_value = {f"{self.new_region_data['latitude']},{self.new_region_data['longitude']}": []}
         mock_process_data.return_value = []
         
         # Make request
-        request = self.factory.post('/api/location/', self.new_location_data, format='json')
+        request = self.factory.post('/api/region/', self.new_region_data, format='json')
         response = self.view(request)
         
         # Verify response and database state
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(Location.objects.filter(name=self.new_location_data['name']).exists())
+        self.assertTrue(Region.objects.filter(name=self.new_region_data['name']).exists())
         
         # Verify mocks were called
         mock_provider.get_climate_data.assert_called_once()
         mock_process_data.assert_called_once()
         mock_create_readings.assert_called_once()
     
-    def test_post_location_missing_fields(self):
+    def test_post_region_missing_fields(self):
         """Test error when required fields are missing"""
-        incomplete_data = {"name": "Incomplete Location"}
-        request = self.factory.post('/api/location/', incomplete_data, format='json')
+        incomplete_data = {"name": "Incomplete Region"}
+        request = self.factory.post('/api/region/', incomplete_data, format='json')
         response = self.view(request)
         
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data['message'], "Missing required fields.")
     
-    def test_post_location_duplicate_name(self):
-        """Test error when location with same name already exists"""
+    def test_post_region_duplicate_name(self):
+        """Test error when region with same name already exists"""
         duplicate_data = {
-            "name": self.test_location.name,  # Same name as existing location
+            "name": self.test_region.name,  # Same name as existing region
             "latitude": 60.0,
             "longitude": 60.0,
             "description": "Duplicate Name"
         }
-        request = self.factory.post('/api/location/', duplicate_data, format='json')
+        request = self.factory.post('/api/region/', duplicate_data, format='json')
         response = self.view(request)
         
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.data['message'], "Location with this name or exact latitude and longitude already exists.")
+        self.assertEqual(response.data['message'], "Region with this name or exact latitude and longitude already exists.")
     
-    def test_delete_location_success(self):
-        """Test successful deletion of a location"""
-        request = self.factory.delete(f'/api/location?name={self.test_location.name}')
+    def test_delete_region_success(self):
+        """Test successful deletion of a region"""
+        request = self.factory.delete(f'/api/region?name={self.test_region.name}')
         response = self.view(request)
         
         self.assertEqual(response.status_code, 200)
-        self.assertFalse(Location.objects.filter(name=self.test_location.name).exists())
+        self.assertFalse(Region.objects.filter(name=self.test_region.name).exists())
     
-    def test_delete_location_missing_name(self):
+    def test_delete_region_missing_name(self):
         """Test error when name parameter is missing for deletion"""
-        request = self.factory.delete('/api/location/')
+        request = self.factory.delete('/api/region/')
         response = self.view(request)
         
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.data['message'], "Name is required to identify the location to delete.")
+        self.assertEqual(response.data['message'], "Name is required to identify the Region to delete.")
     
-    def test_delete_location_not_found(self):
-        """Test error when trying to delete non-existent location"""
-        request = self.factory.delete(f'/api/location?name="Non-existent Location"')
+    def test_delete_region_not_found(self):
+        """Test error when trying to delete non-existent region"""
+        request = self.factory.delete(f'/api/region?name="Non-existent Region"')
         response = self.view(request)
         
         self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.data['message'], "Location with this name does not exist.")
+        self.assertEqual(response.data['message'], "Region with this name does not exist.")
