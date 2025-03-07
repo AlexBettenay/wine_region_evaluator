@@ -2,7 +2,7 @@ from django.db.models import Avg
 import pandas as pd
 from main.models import ClimateReading, Region
 from datetime import date
-from typing import List, TypedDict
+from typing import List, TypedDict, Literal
 
 class RegionIdealSeason(TypedDict):
     name: str
@@ -11,6 +11,10 @@ class RegionIdealSeason(TypedDict):
 class RegionViability(TypedDict): 
     name: str
     longterm_viability: float
+
+class RegionAverage(TypedDict): 
+    name: str
+    avg_score: float
 
 def evaluate_grape_conditions(climate_reading: ClimateReading) -> float:
     """
@@ -113,26 +117,25 @@ def analyze_seasonal_suitability(region: Region) -> List[RegionIdealSeason]:
     
     return [month_names[m] for m in growing_season]
 
-def analyze_longterm_viability(region: Region) -> List[RegionViability]:
+def analyze_longterm_viability(region: Region, time_period: int = 30) -> List[RegionViability]:
     """
     Calculate percentage of time with optimal conditions over last 30 years.
-
-    In a more complete approach, adding a user-defined variables for optimal threshold and time period would be useful.
     
     Parameters:
         region (Region): A model instance representing a wine growing region.
+        time_period (int): Number of years to consider for long-term viability analysis (optional, defaults to 30 years).
     
     Returns:
         A list of Dictionaries (RegionViability) containing:
                 - name (str): Name of the region
                 - longterm_viability (float): Percentage (0-100) of days with optimal growing conditions (score >= 70),
-            rounded to 2 decimal places. Returns 0 if no climate readings exist.
+                rounded to 2 decimal places. Returns 0 if no climate readings exist.
     """
 
-    thirty_years_ago = date(date.today().year - 30, date.today().month, date.today().day)
+    time_period_date = date(date.today().year - time_period, date.today().month, date.today().day)
     
     # Get readings for this region from the last 30 years
-    readings = region.climate_readings.filter(date__gte=thirty_years_ago)
+    readings = region.climate_readings.filter(date__gte=time_period_date)
     
     total_days = readings.count()
     if total_days == 0:
@@ -149,3 +152,55 @@ def analyze_longterm_viability(region: Region) -> List[RegionViability]:
     percentage = (optimal_days / total_days) * 100
     
     return round(percentage, 2)
+
+def analyze_historical_performance(regions: List[Region], only: Literal["best", "worst"] = None, time_period: int=10) -> List[RegionAverage]:
+    """
+    Find the region with worst climate for grape growing over past 10 years
+
+    Parameters:
+        regions (List[Region]): List of Region instances
+        only (str): "best" or "worst" to specify whether to only return the best or worst region. (optional)
+        time_period (int): Number of years to consider for historical performance analysis (optional, defaults to 10 years)
+
+    Returns:
+        A list of Dictionaries (RegionAverage) containing:
+                - name (str): Name of the region
+                - avg_score (float): Average score (0-100) for grape growing conditions over the time period,
+                rounded to 2 decimal places. Sorted in descending order (best first), 
+                if only is set to best, only the best region will be returned, and vice versa for worst.
+    """
+    # Get all Regions
+    
+    time_period_date = date(date.today().year - time_period, date.today().month, date.today().day)
+    
+    region_scores = []
+    for region in regions:
+        # Get readings from last {time_period} years
+        readings = region.climate_readings.filter(
+            date__gte=time_period_date
+        )
+        
+        # Calculate average score
+        total_score = 0
+        for reading in readings:
+            total_score += evaluate_grape_conditions(reading)
+        
+        avg_score = round((total_score / readings.count() if readings.count() > 0 else 0), 2)
+        
+        region_scores.append({
+            'name': region.name,
+            'avg_score': avg_score
+        })
+    
+    # Sort by score ascending (worst first)
+    sorted_regions = sorted(region_scores, key=lambda x: x['avg_score'], reverse=True)
+
+    if only is None or only.lower() not in ["best", "worst"]:
+        return sorted_regions
+
+    # always return as list to make sure the return type is consistent
+    if only.lower() == "best":
+        print(sorted_regions[0])
+        return [sorted_regions[0]]
+    elif only.lower() == "worst":
+        return [sorted_regions[-1]]
