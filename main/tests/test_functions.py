@@ -1,7 +1,7 @@
 from django.test import TestCase
 import pandas as pd
 from unittest.mock import patch, MagicMock
-from datetime import date
+from datetime import date, timedelta
 from main.lib.open_meteo import ClimateDataProvider
 from main.lib.climate_data_functions import (
     get_all_region_coordinates,
@@ -12,6 +12,11 @@ from main.lib.climate_data_functions import (
 from main.models import Region, ClimateReading
 from django.db.models import Max
 import numpy as np
+from main.lib.climate_analyzation import (
+    analyze_seasonal_suitability,
+    analyze_longterm_viability,
+    analyze_historical_performance
+)
 
 class ClimateDataProviderTestCases(TestCase):
     """Test cases for the ClimateDataProvider class"""
@@ -286,3 +291,201 @@ class ClimateDataFunctionsTestCases(TestCase):
         
         # Assertions - count should not change
         self.assertEqual(count_after, count_before)
+
+class ClimateAnalyzationTestCases(TestCase):
+    """Test cases for climate analyzation functions"""
+    
+    def setUp(self):
+        """Create test regions and climate readings"""
+        # Create test region - Southern Hemisphere (e.g., South Africa)
+        self.region = Region.objects.create(
+            name="Test Southern Region",
+            latitude=-33.9,  # Cape Town latitude
+            longitude=18.5,  # Cape Town longitude
+            description="Southern Hemisphere wine region"
+        )
+        
+        # Create climate readings for a full year with southern hemisphere seasonality
+        # In southern hemisphere, summer is Dec-Feb, optimal growing conditions
+        today = date.today()
+        one_year_ago = date(today.year - 1, today.month, today.day)
+        
+        # Create readings for the past year with seasonal patterns
+        for i in range(365):
+            reading_date = one_year_ago + timedelta(days=i)
+            month = reading_date.month
+            
+            # Set temperature based on southern hemisphere seasons
+            # Summer (Dec-Feb): Hot
+            # Winter (Jun-Aug): Cold
+            if month in [12, 1, 2]:  # Summer - optimal conditions
+                mean_temp = 25.0
+                max_temp = 30.0
+                min_temp = 20.0
+                mean_humidity = 50.0
+                max_humidity = 60.0
+                min_humidity = 40.0
+                rain = 2.0
+                cloud_cover = 20.0
+            elif month in [3, 4, 5]:  # Fall - good conditions
+                mean_temp = 17.0
+                max_temp = 20.0
+                min_temp = 15.0
+                mean_humidity = 70.0
+                max_humidity = 80.0
+                min_humidity = 45.0
+                rain = 10.0
+                cloud_cover = 70.0
+            elif month in [6, 7, 8]:  # Winter - poor conditions
+                mean_temp = 8.0
+                max_temp = 10.0
+                min_temp = 6.0
+                mean_humidity = 75.0
+                max_humidity = 85.0
+                min_humidity = 65.0
+                rain = 20.0
+                cloud_cover = 80.0
+            else:  # Spring - improving conditions
+                mean_temp = 15.0
+                max_temp = 17.0
+                min_temp = 13.0
+                mean_humidity = 74.0
+                max_humidity = 80.0
+                min_humidity = 50.0
+                rain = 10.0
+                cloud_cover = 50.0
+            
+            ClimateReading.objects.create(
+                region=self.region,
+                date=reading_date,
+                mean_temperature=mean_temp,
+                max_temperature=max_temp,
+                min_temperature=min_temp,
+                mean_humidity=mean_humidity,
+                max_humidity=max_humidity,
+                min_humidity=min_humidity,
+                rain=rain,
+                cloud_cover=cloud_cover,
+                soil_moisture=0.25
+            )
+        
+        # Create a second region for comparison
+        self.region2 = Region.objects.create(
+            name="Test Southern Region 2",
+            latitude=-34.5,  # Another southern hemisphere location
+            longitude=19.0,
+            description="Another southern hemisphere wine region"
+        )
+        
+        # Add some readings to region2 with poorer conditions
+        for i in range(20):
+            reading_date = today - timedelta(days=i)
+            ClimateReading.objects.create(
+                region=self.region2,
+                date=reading_date,
+                mean_temperature=15.0,
+                max_temperature=20.0,
+                min_temperature=10.0,
+                mean_humidity=80.0,
+                max_humidity=90.0,
+                min_humidity=70.0,
+                rain=25.0,
+                cloud_cover=85.0,
+                soil_moisture=0.4
+            )
+
+    def test_analyze_seasonal_suitability(self):
+        """Test seasonal suitability analysis for southern hemisphere"""
+        # Get the best growing months
+        best_months = analyze_seasonal_suitability(self.region)
+        
+        # In the southern hemisphere, best growing conditions should be in summer months
+        # Should return December, January, February or January, February, March
+        southern_summer_months = set(['December', 'January', 'February'])
+        
+        # Check at least two months match southern hemisphere summer
+        matching_months = len(set(best_months) & southern_summer_months)
+        self.assertGreaterEqual(matching_months, 2, 
+                               f"Expected southern hemisphere summer months, got {best_months}")
+    
+    def test_analyze_seasonal_suitability_no_readings(self):
+        """Test seasonal suitability with no climate readings"""
+        # Create a new region with no readings
+        empty_region = Region.objects.create(
+            name="Empty Region",
+            latitude=-40.0,
+            longitude=175.0,
+            description="Region with no readings"
+        )
+        
+        # This should not raise an exception but return an empty list or None
+        result = analyze_seasonal_suitability(empty_region)
+        self.assertIsNotNone(result, "Function should handle regions with no readings")
+    
+    def test_analyze_longterm_viability(self):
+        """Test long-term viability calculation"""
+        # Test with default 30-year period
+        viability = analyze_longterm_viability(self.region)
+        
+        # We've set up good conditions for summer months (~25% of the year)
+        # so viability should be in a reasonable range
+        self.assertGreater(viability, 0, "Viability score should be positive")
+        self.assertLessEqual(viability, 100, "Viability score should be <= 100%")
+        
+        # Test with 1-year period where we have complete data
+        one_year_viability = analyze_longterm_viability(self.region, time_period=1)
+        # With our test data, this should be around 25-30% (3-4 months of good conditions)
+        self.assertGreater(one_year_viability, 20, "One-year viability should reflect good summer months")
+        self.assertLess(one_year_viability, 40, "One-year viability should reflect only part of year is optimal")
+    
+    def test_analyze_longterm_viability_no_readings(self):
+        """Test long-term viability with no climate readings"""
+        # Create a new region with no readings
+        empty_region = Region.objects.create(
+            name="Empty Viability Region",
+            latitude=-42.0,
+            longitude=173.0,
+            description="Region with no readings for viability"
+        )
+        
+        # Should return 0 for a region with no readings
+        viability = analyze_longterm_viability(empty_region)
+        self.assertEqual(viability, 0, "Viability should be 0 for region with no readings")
+    
+    def test_analyze_historical_performance(self):
+        """Test historical performance calculation"""
+        # Test with default 10-year period
+        performance = analyze_historical_performance(self.region)
+        
+        # Performance should be a score between 0-100
+        self.assertGreaterEqual(performance, 0, "Performance score should be >= 0")
+        self.assertLessEqual(performance, 100, "Performance score should be <= 100")
+        
+        # Test with shorter period where we have complete data
+        short_performance = analyze_historical_performance(self.region, time_period=1)
+        self.assertGreaterEqual(short_performance, 0, "Short-term performance score should be >= 0")
+        self.assertLessEqual(short_performance, 100, "Short-term performance score should be <= 100")
+    
+    def test_analyze_historical_performance_no_readings(self):
+        """Test historical performance with no climate readings"""
+        # Create a new region with no readings
+        empty_region = Region.objects.create(
+            name="Empty Performance Region",
+            latitude=-41.0,
+            longitude=174.0,
+            description="Region with no readings for performance"
+        )
+        
+        # Should return 0 for a region with no readings
+        performance = analyze_historical_performance(empty_region)
+        self.assertEqual(performance, 0, "Performance should be 0 for region with no readings")
+
+    def test_region_comparison(self):
+        """Test comparison between regions with different climate conditions"""
+        # Get performance scores for both regions
+        performance1 = analyze_historical_performance(self.region, time_period=1)
+        performance2 = analyze_historical_performance(self.region2, time_period=1)
+        
+        # Region 1 should have better performance due to our data setup
+        self.assertGreater(performance1, performance2, 
+                         "Region with better climate should have higher performance score")

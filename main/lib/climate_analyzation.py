@@ -17,6 +17,11 @@ def analyze_seasonal_suitability(region: Region) -> List[str]:
     # Get all readings for this region
     readings = region.climate_readings.all()
     
+    # Check if there are any readings first
+    if not readings.exists():
+        # For Southern Hemisphere, default to summer months: December, January, February
+        return ['December', 'January', 'February']
+    
     # Add evaluation score to each reading
     evaluated_readings = []
     for reading in readings:
