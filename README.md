@@ -38,6 +38,7 @@ cp .env.example .env
 ```
 docker compose up --build
 ```
+- Example data will be automatically populated in the database when first running the docker container.
 
 5. The application will be available at `http://localhost:8000`.
 
